@@ -307,7 +307,7 @@ function setupControls() {
   });
 
   document.getElementById('newGameBtn').addEventListener('click', () => {
-    setSettingsOpen(true);
+    setSettingsOpen(false);
     newGame();
   });
 
