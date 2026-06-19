@@ -225,3 +225,52 @@ h1 {
 .legend .mark.good { background: #6fcf6f; }
 .legend .mark.normal { background: #9fb6a8; }
 .legend .mark.bad { background: #e25b4a; }
+
+.stats {
+  margin-top: 22px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.stats[hidden] {
+  display: none;
+}
+
+.stats h2 {
+  font-size: 14px;
+  margin: 0 0 10px;
+  opacity: 0.75;
+  font-weight: normal;
+}
+
+.stats table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stats th, .stats td {
+  text-align: center;
+  padding: 6px 4px;
+}
+
+.stats th {
+  opacity: 0.6;
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.stats td:first-child {
+  text-align: left;
+  opacity: 0.9;
+}
+
+.stats tr.current-difficulty td:first-child {
+  color: #ffd54a;
+  font-weight: bold;
+}
+
+.stats td.win { color: #6fcf6f; }
+.stats td.lose { color: #e25b4a; }
+.stats td.draw { color: #9fb6a8; }

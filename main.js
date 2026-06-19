@@ -9,8 +9,16 @@ const legendEl = document.getElementById('legend');
 const difficultyRow = document.getElementById('difficultyRow');
 const colorRow = document.getElementById('colorRow');
 const adviceSpeedRow = document.getElementById('adviceSpeedRow');
+const statsPanel = document.getElementById('statsPanel');
 
 const SETTINGS_KEY = 'saikyo-othello-settings';
+const DIFFICULTIES = ['easy', 'normal', 'hard', 'strongest'];
+
+function emptyStats() {
+  const stats = {};
+  for (const d of DIFFICULTIES) stats[d] = { win: 0, lose: 0, draw: 0 };
+  return stats;
+}
 
 function loadSettings() {
   try {
@@ -28,6 +36,7 @@ function saveSettings() {
       humanColor: state.humanColor,
       adviceOn: state.adviceOn,
       adviceSpeed: state.adviceSpeed,
+      stats: state.stats,
     }));
   } catch (e) {
     // ignore (e.g. private browsing without storage access)
@@ -44,6 +53,8 @@ let state = {
   humanColor: saved.humanColor || BLACK, // which color the human plays in 'cpu' mode
   adviceOn: !!saved.adviceOn,
   adviceSpeed: saved.adviceSpeed || '5000',
+  stats: Object.assign(emptyStats(), saved.stats),
+  gameRecorded: false,
   busy: false,
 };
 
@@ -126,11 +137,36 @@ function render() {
   updateStatus(moves);
 }
 
+function recordResultIfNeeded() {
+  if (state.gameRecorded || state.mode !== 'cpu') return;
+  state.gameRecorded = true;
+  const { black, white } = countDiscs(state.board);
+  const humanDiscs = state.humanColor === BLACK ? black : white;
+  const cpuDiscs = state.humanColor === BLACK ? white : black;
+  const result = humanDiscs > cpuDiscs ? 'win' : humanDiscs < cpuDiscs ? 'lose' : 'draw';
+  state.stats[state.difficulty][result]++;
+  saveSettings();
+  renderStats();
+}
+
+function renderStats() {
+  statsPanel.hidden = state.mode !== 'cpu';
+  for (const d of DIFFICULTIES) {
+    const row = statsPanel.querySelector(`tr[data-stats-row="${d}"]`);
+    row.classList.toggle('current-difficulty', d === state.difficulty);
+    const s = state.stats[d];
+    row.querySelector('.win').textContent = s.win;
+    row.querySelector('.lose').textContent = s.lose;
+    row.querySelector('.draw').textContent = s.draw;
+  }
+}
+
 function updateStatus(moves) {
   if (isGameOver(state.board)) {
     const { black, white } = countDiscs(state.board);
     if (black === white) statusEl.textContent = `引き分け（黒${black} - 白${white}）`;
     else statusEl.textContent = (black > white ? '黒の勝ち' : '白の勝ち') + `（黒${black} - 白${white}）`;
+    recordResultIfNeeded();
     return;
   }
   const playerLabel = state.current === BLACK ? '黒' : '白';
@@ -199,6 +235,8 @@ function newGame() {
   state.board = createBoard();
   state.current = BLACK;
   state.busy = false;
+  state.gameRecorded = false;
+  renderStats();
   render();
   maybeRunComputer();
 }
@@ -276,5 +314,6 @@ buildBoardDom();
 setupControls();
 applySavedSettingsToUi();
 state.current = BLACK;
+renderStats();
 render();
 maybeRunComputer();
