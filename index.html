@@ -16,7 +16,12 @@
 <div class="app">
   <h1>最強オセロ</h1>
 
-  <div class="panel">
+  <div class="topbar">
+    <button id="settingsToggleBtn" class="toggle-btn">⚙ 設定</button>
+    <button id="newGameBtn" class="toggle-btn primary">新しく対戦する</button>
+  </div>
+
+  <div class="panel" id="settingsPanel">
     <div class="panel-section">
       <div class="field">
         <label>モード</label>
@@ -65,8 +70,6 @@
         </div>
       </div>
     </div>
-
-    <button id="newGameBtn" class="primary">新しく対戦する</button>
   </div>
 
   <div class="status" id="status">黒の番です</div>

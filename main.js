@@ -10,6 +10,8 @@ const difficultyRow = document.getElementById('difficultyRow');
 const colorRow = document.getElementById('colorRow');
 const adviceSpeedRow = document.getElementById('adviceSpeedRow');
 const statsPanel = document.getElementById('statsPanel');
+const settingsPanel = document.getElementById('settingsPanel');
+const settingsToggleBtn = document.getElementById('settingsToggleBtn');
 
 const SETTINGS_KEY = 'saikyo-othello-settings';
 const DIFFICULTIES = ['easy', 'normal', 'hard', 'strongest'];
@@ -55,8 +57,16 @@ let state = {
   adviceSpeed: saved.adviceSpeed || '5000',
   stats: Object.assign(emptyStats(), saved.stats),
   gameRecorded: false,
+  hasStarted: false, // becomes true once the first move of the current game is played
+  settingsOpen: true,
   busy: false,
 };
+
+function setSettingsOpen(open) {
+  state.settingsOpen = open;
+  settingsPanel.hidden = !open;
+  settingsToggleBtn.classList.toggle('open', open);
+}
 
 function computerColor() {
   return opponent(state.humanColor);
@@ -182,6 +192,11 @@ function updateStatus(moves) {
 }
 
 function afterMove() {
+  if (!state.hasStarted) {
+    state.hasStarted = true;
+    if (state.settingsOpen) setSettingsOpen(false);
+  }
+
   if (isGameOver(state.board)) { render(); return; }
 
   const nextPlayer = opponent(state.current);
@@ -236,6 +251,7 @@ function newGame() {
   state.current = BLACK;
   state.busy = false;
   state.gameRecorded = false;
+  state.hasStarted = false;
   renderStats();
   render();
   maybeRunComputer();
@@ -290,7 +306,14 @@ function setupControls() {
     render();
   });
 
-  document.getElementById('newGameBtn').addEventListener('click', newGame);
+  document.getElementById('newGameBtn').addEventListener('click', () => {
+    setSettingsOpen(true);
+    newGame();
+  });
+
+  settingsToggleBtn.addEventListener('click', () => {
+    setSettingsOpen(!state.settingsOpen);
+  });
 }
 
 function setActive(groupId, activeBtn) {
@@ -313,6 +336,7 @@ function applySavedSettingsToUi() {
 buildBoardDom();
 setupControls();
 applySavedSettingsToUi();
+setSettingsOpen(true);
 state.current = BLACK;
 renderStats();
 render();
