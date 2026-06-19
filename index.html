@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>最強オセロ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <h1>最強オセロ</h1>
+
+  <div class="panel">
+    <div class="panel-section">
+      <div class="field">
+        <label>モード</label>
+        <div class="seg" id="modeSeg">
+          <button data-mode="cpu" class="active">1人で対戦</button>
+          <button data-mode="pvp">2人で対戦</button>
+        </div>
+      </div>
+
+      <div class="field" id="colorRow">
+        <label>あなたの手番</label>
+        <div class="seg" id="colorSeg">
+          <button data-color="black" class="active">先手（黒）</button>
+          <button data-color="white">後手（白）</button>
+        </div>
+      </div>
+
+      <div class="field" id="difficultyRow">
+        <label>難易度</label>
+        <div class="seg" id="diffSeg">
+          <button data-diff="easy">かんたん</button>
+          <button data-diff="normal" class="active">ふつう</button>
+          <button data-diff="hard">むずかしい</button>
+          <button data-diff="strongest">最強</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <div class="panel-section">
+      <div class="field">
+        <label>アドバイスモード</label>
+        <div class="seg" id="adviceSeg">
+          <button data-advice="off" class="active">オフ</button>
+          <button data-advice="on">オン</button>
+        </div>
+      </div>
+
+      <div class="field" id="adviceSpeedRow">
+        <label>アドバイスの計算時間</label>
+        <div class="seg" id="adviceSpeedSeg">
+          <button data-speed="fast">最速</button>
+          <button data-speed="5000" class="active">5秒</button>
+          <button data-speed="10000">10秒</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="newGameBtn" class="primary">新しく対戦する</button>
+  </div>
+
+  <div class="status" id="status">黒の番です</div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="score">
+    <div class="score-item black"><span class="disc-icon black"></span><span id="blackScore">2</span></div>
+    <div class="score-item white"><span class="disc-icon white"></span><span id="whiteScore">2</span></div>
+  </div>
+
+  <div class="legend" id="legend" hidden>
+    <span class="legend-item"><span class="mark best"></span>最善手</span>
+    <span class="legend-item"><span class="mark good"></span>良い手</span>
+    <span class="legend-item"><span class="mark normal"></span>ふつうの手</span>
+    <span class="legend-item"><span class="mark bad"></span>悪い手</span>
+  </div>
+</div>
+
+<script src="ai.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
