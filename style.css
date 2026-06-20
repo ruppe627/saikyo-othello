@@ -244,11 +244,16 @@ h1 {
 .legend .mark.normal { background: #9fb6a8; }
 .legend .mark.bad { background: #e25b4a; }
 
+.legend .tally {
+  display: inline-block;
+  min-width: 16px;
+  text-align: center;
+  font-weight: bold;
+  opacity: 0.9;
+}
+
 .stats {
-  margin-top: 22px;
-  background: rgba(0, 0, 0, 0.22);
-  border-radius: 14px;
-  padding: 14px 16px;
+  padding-top: 2px;
 }
 
 .stats[hidden] {

@@ -10,6 +10,7 @@ const adviceWorker = new Worker('advice-worker.js');
 let adviceToken = 0;
 let pendingAdviceFinish = null;
 let pendingAdviceFallback = null;
+let currentAdviceMap = new Map(); // tier lookup for the move the human is about to play
 
 adviceWorker.onmessage = (event) => {
   const { token, advice } = event.data;
@@ -77,6 +78,7 @@ let state = {
   adviceOn: !!saved.adviceOn,
   adviceSpeed: saved.adviceSpeed || '5000',
   stats: Object.assign(emptyStats(), saved.stats),
+  moveTally: { best: 0, good: 0, normal: 0, bad: 0 },
   gameRecorded: false,
   hasStarted: false, // becomes true once the first move of the current game is played
   started: false, // becomes true once "新しく対戦する" has been pressed for the first time
@@ -149,6 +151,7 @@ function render() {
   // require a heavy search) are computed afterwards and patched in once ready.
   paintCells(moves, new Map());
   legendEl.hidden = !showAdvice;
+  currentAdviceMap = new Map();
 
   adviceToken++;
   pendingAdviceFinish = null;
@@ -164,6 +167,7 @@ function render() {
       pendingAdviceFinish = null;
       pendingAdviceFallback = null;
       const adviceMap = new Map(advice.map(a => [a.idx, a]));
+      currentAdviceMap = adviceMap;
       paintCells(legalMoves(state.board, state.current), adviceMap);
     };
     pendingAdviceFinish = finish;
@@ -196,6 +200,12 @@ function recordResultIfNeeded() {
   state.stats[state.difficulty][result]++;
   saveSettings();
   renderStats();
+}
+
+function renderTally() {
+  for (const tier of ['best', 'good', 'normal', 'bad']) {
+    legendEl.querySelector(`[data-tally="${tier}"]`).textContent = state.moveTally[tier];
+  }
 }
 
 function renderStats() {
@@ -281,6 +291,12 @@ function onCellClick(idx) {
   const flips = moves.get(idx);
   if (!flips) return;
 
+  const advice = currentAdviceMap.get(idx);
+  if (advice) {
+    state.moveTally[advice.tier]++;
+    renderTally();
+  }
+
   state.board = applyMove(state.board, idx, state.current, flips);
   afterMove();
 }
@@ -291,6 +307,8 @@ function newGame() {
   state.busy = false;
   state.gameRecorded = false;
   state.hasStarted = false;
+  state.moveTally = { best: 0, good: 0, normal: 0, bad: 0 };
+  renderTally();
   renderStats();
   if (state.started) {
     render();
