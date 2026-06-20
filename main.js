@@ -1,31 +1,30 @@
 const { BLACK, WHITE, createBoard, opponent, legalMoves, applyMove, countDiscs,
         isGameOver, chooseComputerMove, adviseMoves } = window.Othello;
 
-// Advice mode can think for up to 10 seconds. Running it in a Worker keeps
-// that heavy search off the main thread so the board stays clickable the
-// whole time instead of freezing until advice is ready. If the worker ever
-// fails to respond (load error, environment that blocks workers, etc.) we
-// fall back to computing on the main thread so advice still shows up.
-const adviceWorker = new Worker('advice-worker.js');
+// Advice mode can think for up to 10 seconds. Each request gets its OWN
+// dedicated Worker (rather than sharing one) so that several turns' worth of
+// thinking — which happens whenever the player moves faster than advice
+// resolves — run truly in parallel instead of queuing behind each other on a
+// single worker's message queue. A shared worker would otherwise serialize
+// requests, and the per-request timeout fallback (see below) would then
+// misfire and run a heavy synchronous computation on the main thread while
+// the queued worker request was still legitimately in progress — freezing
+// the page instead of preventing a freeze.
 let adviceToken = 0;
 let currentAdviceMap = new Map(); // tier lookup for the move the human is about to play
 
-// Requests are kept by token even after a newer turn starts, so that if the
-// human moves before advice for their turn finished computing, the tally can
-// still be credited once the (now "stale" for display purposes) result
-// arrives — otherwise fast players would never get a tally entry at all.
-// awaitingTallyByToken can hold MULTIPLE outstanding entries at once: if the
-// player moves again before an earlier turn's advice has resolved (common
-// with the 5s/10s speeds), each turn's awaiting move must survive
-// independently rather than being overwritten by the next one.
-const pendingAdviceRequests = new Map(); // token -> { fallback() }
+// Awaiting tallies are kept by token even after a newer turn starts, so that
+// if the human moves before advice for their turn finished computing, the
+// tally can still be credited once the (now "stale" for display purposes)
+// result arrives — otherwise fast players would never get a tally entry at
+// all. This is a Map (not a single value) because it can hold MULTIPLE
+// outstanding entries at once: if the player moves again before an earlier
+// turn's advice has resolved (common with the 5s/10s speeds), each turn's
+// awaiting move must survive independently rather than being overwritten by
+// the next one.
 const awaitingTallyByToken = new Map(); // token -> idx
 
 function handleAdviceResult(token, advice) {
-  const req = pendingAdviceRequests.get(token);
-  if (!req) return;
-  pendingAdviceRequests.delete(token);
-
   if (token === adviceToken) {
     currentAdviceMap = new Map(advice.map(a => [a.idx, a]));
     paintCells(legalMoves(state.board, state.current), currentAdviceMap);
@@ -42,13 +41,28 @@ function handleAdviceResult(token, advice) {
   }
 }
 
-adviceWorker.onmessage = (event) => {
-  handleAdviceResult(event.data.token, event.data.advice);
-};
+// Spawns a dedicated worker for this one request and tears it down once it
+// answers (or errors), so it can never block or be blocked by another turn's
+// request. A timeout provides one last fallback in case the worker hangs
+// silently (no message, no error) — computing on the main thread is a worse
+// outcome than nothing, but only this single request's own budget is at risk
+// since every request has its own isolated worker.
+function requestAdvice(token, board, player, speed) {
+  const worker = new Worker('advice-worker.js');
+  let settled = false;
+  const finish = (advice) => {
+    if (settled) return;
+    settled = true;
+    worker.terminate();
+    handleAdviceResult(token, advice);
+  };
+  worker.onmessage = (event) => finish(event.data.advice);
+  worker.onerror = () => finish(adviseMoves(board, player, speed));
+  worker.postMessage({ token, board, player, speed });
 
-adviceWorker.onerror = () => {
-  for (const [token, req] of pendingAdviceRequests) req.fallback();
-};
+  const speedMs = speed === 'fast' ? 300 : Number(speed);
+  setTimeout(() => finish(adviseMoves(board, player, speed)), speedMs + 5000);
+}
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -186,24 +200,7 @@ function render() {
 
   adviceToken++;
   if (showAdvice) {
-    const myToken = adviceToken;
-    const boardSnapshot = state.board;
-    const player = state.current;
-    const speed = state.adviceSpeed;
-
-    pendingAdviceRequests.set(myToken, {
-      fallback: () => handleAdviceResult(myToken, adviseMoves(boardSnapshot, player, speed)),
-    });
-
-    adviceWorker.postMessage({ token: myToken, board: boardSnapshot, player, speed });
-
-    // Safety net: if the worker never replies (load failure, blocked
-    // environment, etc.) compute on the main thread instead of staying silent.
-    const speedMs = speed === 'fast' ? 300 : Number(speed);
-    setTimeout(() => {
-      const req = pendingAdviceRequests.get(myToken);
-      if (req) req.fallback();
-    }, speedMs + 2000);
+    requestAdvice(adviceToken, state.board, state.current, state.adviceSpeed);
   }
 
   const { black, white } = countDiscs(state.board);
@@ -337,7 +334,6 @@ function newGame() {
   state.gameRecorded = false;
   state.hasStarted = false;
   state.moveTally = { best: 0, good: 0, normal: 0, bad: 0 };
-  pendingAdviceRequests.clear();
   awaitingTallyByToken.clear();
   renderTally();
   renderStats();
