@@ -1,17 +1,24 @@
 const { BLACK, WHITE, createBoard, opponent, legalMoves, applyMove, countDiscs,
-        isGameOver, chooseComputerMove } = window.Othello;
+        isGameOver, chooseComputerMove, adviseMoves } = window.Othello;
 
 // Advice mode can think for up to 10 seconds. Running it in a Worker keeps
 // that heavy search off the main thread so the board stays clickable the
-// whole time instead of freezing until advice is ready.
+// whole time instead of freezing until advice is ready. If the worker ever
+// fails to respond (load error, environment that blocks workers, etc.) we
+// fall back to computing on the main thread so advice still shows up.
 const adviceWorker = new Worker('advice-worker.js');
 let adviceToken = 0;
+let pendingAdviceFinish = null;
+let pendingAdviceFallback = null;
+
 adviceWorker.onmessage = (event) => {
   const { token, advice } = event.data;
-  if (token !== adviceToken) return; // a move happened since this was requested
-  const moves = legalMoves(state.board, state.current);
-  const adviceMap = new Map(advice.map(a => [a.idx, a]));
-  paintCells(moves, adviceMap);
+  if (token !== adviceToken || !pendingAdviceFinish) return;
+  pendingAdviceFinish(advice);
+};
+
+adviceWorker.onerror = () => {
+  if (pendingAdviceFallback) pendingAdviceFallback();
 };
 
 const boardEl = document.getElementById('board');
@@ -25,6 +32,7 @@ const adviceSpeedRow = document.getElementById('adviceSpeedRow');
 const statsPanel = document.getElementById('statsPanel');
 const settingsPanel = document.getElementById('settingsPanel');
 const settingsToggleBtn = document.getElementById('settingsToggleBtn');
+const gameAreaEl = document.getElementById('gameArea');
 
 const SETTINGS_KEY = 'saikyo-othello-settings';
 const DIFFICULTIES = ['easy', 'normal', 'hard', 'strongest'];
@@ -71,6 +79,7 @@ let state = {
   stats: Object.assign(emptyStats(), saved.stats),
   gameRecorded: false,
   hasStarted: false, // becomes true once the first move of the current game is played
+  started: false, // becomes true once "新しく対戦する" has been pressed for the first time
   settingsOpen: true,
   busy: false,
 };
@@ -142,13 +151,32 @@ function render() {
   legendEl.hidden = !showAdvice;
 
   adviceToken++;
+  pendingAdviceFinish = null;
+  pendingAdviceFallback = null;
   if (showAdvice) {
-    adviceWorker.postMessage({
-      token: adviceToken,
-      board: state.board,
-      player: state.current,
-      speed: state.adviceSpeed,
-    });
+    const myToken = adviceToken;
+    const boardSnapshot = state.board;
+    const player = state.current;
+    const speed = state.adviceSpeed;
+
+    const finish = (advice) => {
+      if (myToken !== adviceToken) return; // a move happened since this was requested
+      pendingAdviceFinish = null;
+      pendingAdviceFallback = null;
+      const adviceMap = new Map(advice.map(a => [a.idx, a]));
+      paintCells(legalMoves(state.board, state.current), adviceMap);
+    };
+    pendingAdviceFinish = finish;
+    pendingAdviceFallback = () => finish(adviseMoves(boardSnapshot, player, speed));
+
+    adviceWorker.postMessage({ token: myToken, board: boardSnapshot, player, speed });
+
+    // Safety net: if the worker never replies (load failure, blocked
+    // environment, etc.) compute on the main thread instead of staying silent.
+    const speedMs = speed === 'fast' ? 300 : Number(speed);
+    setTimeout(() => {
+      if (myToken === adviceToken && pendingAdviceFallback) pendingAdviceFallback();
+    }, speedMs + 2000);
   }
 
   const { black, white } = countDiscs(state.board);
@@ -264,8 +292,10 @@ function newGame() {
   state.gameRecorded = false;
   state.hasStarted = false;
   renderStats();
-  render();
-  maybeRunComputer();
+  if (state.started) {
+    render();
+    maybeRunComputer();
+  }
 }
 
 function setupControls() {
@@ -318,6 +348,8 @@ function setupControls() {
   });
 
   document.getElementById('newGameBtn').addEventListener('click', () => {
+    state.started = true;
+    gameAreaEl.hidden = false;
     setSettingsOpen(false);
     newGame();
   });
@@ -350,5 +382,3 @@ applySavedSettingsToUi();
 setSettingsOpen(true);
 state.current = BLACK;
 renderStats();
-render();
-maybeRunComputer();
