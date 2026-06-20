@@ -8,18 +8,41 @@ const { BLACK, WHITE, createBoard, opponent, legalMoves, applyMove, countDiscs,
 // fall back to computing on the main thread so advice still shows up.
 const adviceWorker = new Worker('advice-worker.js');
 let adviceToken = 0;
-let pendingAdviceFinish = null;
-let pendingAdviceFallback = null;
 let currentAdviceMap = new Map(); // tier lookup for the move the human is about to play
 
+// Requests are kept by token even after a newer turn starts, so that if the
+// human moves before advice for their turn finished computing, the tally can
+// still be credited once the (now "stale" for display purposes) result
+// arrives — otherwise fast players would never get a tally entry at all.
+const pendingAdviceRequests = new Map(); // token -> { fallback() }
+let awaitingTally = null; // { token, idx } for a move played before its advice was ready
+
+function handleAdviceResult(token, advice) {
+  const req = pendingAdviceRequests.get(token);
+  if (!req) return;
+  pendingAdviceRequests.delete(token);
+
+  if (token === adviceToken) {
+    currentAdviceMap = new Map(advice.map(a => [a.idx, a]));
+    paintCells(legalMoves(state.board, state.current), currentAdviceMap);
+  }
+
+  if (awaitingTally && awaitingTally.token === token) {
+    const played = advice.find(a => a.idx === awaitingTally.idx);
+    if (played) {
+      state.moveTally[played.tier]++;
+      renderTally();
+    }
+    awaitingTally = null;
+  }
+}
+
 adviceWorker.onmessage = (event) => {
-  const { token, advice } = event.data;
-  if (token !== adviceToken || !pendingAdviceFinish) return;
-  pendingAdviceFinish(advice);
+  handleAdviceResult(event.data.token, event.data.advice);
 };
 
 adviceWorker.onerror = () => {
-  if (pendingAdviceFallback) pendingAdviceFallback();
+  for (const [token, req] of pendingAdviceRequests) req.fallback();
 };
 
 const boardEl = document.getElementById('board');
@@ -157,24 +180,15 @@ function render() {
   currentAdviceMap = new Map();
 
   adviceToken++;
-  pendingAdviceFinish = null;
-  pendingAdviceFallback = null;
   if (showAdvice) {
     const myToken = adviceToken;
     const boardSnapshot = state.board;
     const player = state.current;
     const speed = state.adviceSpeed;
 
-    const finish = (advice) => {
-      if (myToken !== adviceToken) return; // a move happened since this was requested
-      pendingAdviceFinish = null;
-      pendingAdviceFallback = null;
-      const adviceMap = new Map(advice.map(a => [a.idx, a]));
-      currentAdviceMap = adviceMap;
-      paintCells(legalMoves(state.board, state.current), adviceMap);
-    };
-    pendingAdviceFinish = finish;
-    pendingAdviceFallback = () => finish(adviseMoves(boardSnapshot, player, speed));
+    pendingAdviceRequests.set(myToken, {
+      fallback: () => handleAdviceResult(myToken, adviseMoves(boardSnapshot, player, speed)),
+    });
 
     adviceWorker.postMessage({ token: myToken, board: boardSnapshot, player, speed });
 
@@ -182,7 +196,8 @@ function render() {
     // environment, etc.) compute on the main thread instead of staying silent.
     const speedMs = speed === 'fast' ? 300 : Number(speed);
     setTimeout(() => {
-      if (myToken === adviceToken && pendingAdviceFallback) pendingAdviceFallback();
+      const req = pendingAdviceRequests.get(myToken);
+      if (req) req.fallback();
     }, speedMs + 2000);
   }
 
@@ -294,10 +309,16 @@ function onCellClick(idx) {
   const flips = moves.get(idx);
   if (!flips) return;
 
-  const advice = currentAdviceMap.get(idx);
-  if (advice) {
-    state.moveTally[advice.tier]++;
-    renderTally();
+  if (state.adviceOn) {
+    const advice = currentAdviceMap.get(idx);
+    if (advice) {
+      state.moveTally[advice.tier]++;
+      renderTally();
+    } else {
+      // Advice for this move hasn't finished computing yet — remember it so
+      // the tally still gets credited once that computation resolves.
+      awaitingTally = { token: adviceToken, idx };
+    }
   }
 
   state.board = applyMove(state.board, idx, state.current, flips);
@@ -311,6 +332,8 @@ function newGame() {
   state.gameRecorded = false;
   state.hasStarted = false;
   state.moveTally = { best: 0, good: 0, normal: 0, bad: 0 };
+  pendingAdviceRequests.clear();
+  awaitingTally = null;
   renderTally();
   renderStats();
   if (state.started) {
