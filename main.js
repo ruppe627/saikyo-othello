@@ -144,12 +144,15 @@ function paintCells(moves, adviceMap) {
 
 function render() {
   const moves = legalMoves(state.board, state.current);
-  const showAdvice = state.adviceOn && isHumanTurn();
+  const humanTurn = isHumanTurn();
+  const showAdvice = state.adviceOn && humanTurn;
 
   // Paint immediately without advice so the human's own move (or the
   // computer's just-played move) shows up with no delay. Advice marks (which
   // require a heavy search) are computed afterwards and patched in once ready.
-  paintCells(moves, new Map());
+  // While the computer is thinking, don't mark its candidate cells either —
+  // those aren't something the player can act on.
+  paintCells(humanTurn ? moves : new Map(), new Map());
   legendEl.hidden = !showAdvice;
   currentAdviceMap = new Map();
 

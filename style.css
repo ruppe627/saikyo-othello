@@ -97,6 +97,16 @@ h1 {
   flex: 1 1 auto;
 }
 
+#diffSeg {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+#diffSeg button {
+  padding: 9px 4px;
+  font-size: 12px;
+}
+
 .seg button.active {
   background: #ffd54a;
   color: #1b1b1b;
