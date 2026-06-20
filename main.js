@@ -14,8 +14,12 @@ let currentAdviceMap = new Map(); // tier lookup for the move the human is about
 // human moves before advice for their turn finished computing, the tally can
 // still be credited once the (now "stale" for display purposes) result
 // arrives — otherwise fast players would never get a tally entry at all.
+// awaitingTallyByToken can hold MULTIPLE outstanding entries at once: if the
+// player moves again before an earlier turn's advice has resolved (common
+// with the 5s/10s speeds), each turn's awaiting move must survive
+// independently rather than being overwritten by the next one.
 const pendingAdviceRequests = new Map(); // token -> { fallback() }
-let awaitingTally = null; // { token, idx } for a move played before its advice was ready
+const awaitingTallyByToken = new Map(); // token -> idx
 
 function handleAdviceResult(token, advice) {
   const req = pendingAdviceRequests.get(token);
@@ -27,13 +31,14 @@ function handleAdviceResult(token, advice) {
     paintCells(legalMoves(state.board, state.current), currentAdviceMap);
   }
 
-  if (awaitingTally && awaitingTally.token === token) {
-    const played = advice.find(a => a.idx === awaitingTally.idx);
+  if (awaitingTallyByToken.has(token)) {
+    const idx = awaitingTallyByToken.get(token);
+    awaitingTallyByToken.delete(token);
+    const played = advice.find(a => a.idx === idx);
     if (played) {
       state.moveTally[played.tier]++;
       renderTally();
     }
-    awaitingTally = null;
   }
 }
 
@@ -317,7 +322,7 @@ function onCellClick(idx) {
     } else {
       // Advice for this move hasn't finished computing yet — remember it so
       // the tally still gets credited once that computation resolves.
-      awaitingTally = { token: adviceToken, idx };
+      awaitingTallyByToken.set(adviceToken, idx);
     }
   }
 
@@ -333,7 +338,7 @@ function newGame() {
   state.hasStarted = false;
   state.moveTally = { best: 0, good: 0, normal: 0, bad: 0 };
   pendingAdviceRequests.clear();
-  awaitingTally = null;
+  awaitingTallyByToken.clear();
   renderTally();
   renderStats();
   if (state.started) {
