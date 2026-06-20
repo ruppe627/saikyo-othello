@@ -36,7 +36,7 @@ const settingsToggleBtn = document.getElementById('settingsToggleBtn');
 const gameAreaEl = document.getElementById('gameArea');
 
 const SETTINGS_KEY = 'saikyo-othello-settings';
-const DIFFICULTIES = ['easy', 'normal', 'hard', 'strongest'];
+const DIFFICULTIES = ['weakest', 'easy', 'normal', 'hard', 'strongest'];
 
 function emptyStats() {
   const stats = {};

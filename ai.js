@@ -257,10 +257,11 @@ function scoredMovesDeepening(board, player, timeBudgetMs, exactEmpties) {
 }
 
 const DIFFICULTY_CONFIG = {
-  easy:      { depth: 2, timeMs: 150, exactEmpties: 0 },
-  normal:    { depth: 3, timeMs: 250, exactEmpties: 0 },
-  hard:      { timeMs: 700,  exactEmpties: 10, deepening: true },
-  strongest: { timeMs: 1600, exactEmpties: 14, deepening: true },
+  weakest:   { depth: 2, timeMs: 150,  exactEmpties: 0 },
+  easy:      { depth: 2, timeMs: 150,  exactEmpties: 0 },
+  normal:    { depth: 3, timeMs: 250,  exactEmpties: 0 },
+  hard:      { timeMs: 500,  exactEmpties: 8,  deepening: true },
+  strongest: { timeMs: 3000, exactEmpties: 18, deepening: true },
 };
 
 // How long advice mode is allowed to think before showing a recommendation.
@@ -281,6 +282,10 @@ function chooseComputerMove(board, player, difficulty) {
     ? scoredMovesDeepening(board, player, cfg.timeMs, cfg.exactEmpties)
     : scoredMovesFixed(board, player, cfg.depth, cfg.timeMs, cfg.exactEmpties);
 
+  if (difficulty === 'weakest') {
+    // Always the single worst-scoring move, deterministically.
+    return ranked[ranked.length - 1].idx;
+  }
   if (difficulty === 'easy') {
     // Intentionally pick from the worse half so the human side can win.
     const worstHalf = ranked.slice(Math.ceil(ranked.length / 2));

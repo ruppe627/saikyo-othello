@@ -1,4 +1,4 @@
-const CACHE_NAME = 'saikyo-othello-v6';
+const CACHE_NAME = 'saikyo-othello-v7';
 const ASSETS = [
   './',
   './index.html',
