@@ -315,7 +315,7 @@ function adviseMoves(board, player, speed) {
   });
 }
 
-window.Othello = {
+self.Othello = {
   EMPTY, BLACK, WHITE,
   createBoard, opponent, legalMoves, applyMove, countDiscs,
   isGameOver, chooseComputerMove, adviseMoves,

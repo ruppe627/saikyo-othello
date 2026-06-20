@@ -1,5 +1,18 @@
 const { BLACK, WHITE, createBoard, opponent, legalMoves, applyMove, countDiscs,
-        isGameOver, chooseComputerMove, adviseMoves } = window.Othello;
+        isGameOver, chooseComputerMove } = window.Othello;
+
+// Advice mode can think for up to 10 seconds. Running it in a Worker keeps
+// that heavy search off the main thread so the board stays clickable the
+// whole time instead of freezing until advice is ready.
+const adviceWorker = new Worker('advice-worker.js');
+let adviceToken = 0;
+adviceWorker.onmessage = (event) => {
+  const { token, advice } = event.data;
+  if (token !== adviceToken) return; // a move happened since this was requested
+  const moves = legalMoves(state.board, state.current);
+  const adviceMap = new Map(advice.map(a => [a.idx, a]));
+  paintCells(moves, adviceMap);
+};
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -87,8 +100,6 @@ function buildBoardDom() {
   }
 }
 
-let adviceToken = 0;
-
 function isHumanTurn() {
   return !(state.mode === 'cpu' && state.current === computerColor());
 }
@@ -130,14 +141,14 @@ function render() {
   paintCells(moves, new Map());
   legendEl.hidden = !showAdvice;
 
-  const myToken = ++adviceToken;
+  adviceToken++;
   if (showAdvice) {
-    setTimeout(() => {
-      if (myToken !== adviceToken) return; // state moved on, discard stale result
-      const advice = adviseMoves(state.board, state.current, state.adviceSpeed);
-      const adviceMap = new Map(advice.map(a => [a.idx, a]));
-      paintCells(moves, adviceMap);
-    }, 0);
+    adviceWorker.postMessage({
+      token: adviceToken,
+      board: state.board,
+      player: state.current,
+      speed: state.adviceSpeed,
+    });
   }
 
   const { black, white } = countDiscs(state.board);
